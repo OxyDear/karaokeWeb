@@ -1,8 +1,7 @@
-const Song = require('../models/songs.model');
+const { Song, Playlist } = require('/Users/oxydear/Library/CloudStorage/iCloudDrive-iCloudDrive(8.11.25)/com~apple~CloudDocs/Documents/Documents-IvansMacBookPro/IvansMac/IDEs/WebStorm/karaoke/models');
 
-// Валидация данных песни. isPartial=true допускает частичный набор полей
-// (например, для PUT можно потребовать все поля, но здесь для гибкости
-// проверяем только те, что переданы, плюс обязательный набор при создании).
+// Валидация данных песни на уровне контроллера (доп. к валидации Sequelize).
+// isPartial=true допускает частичный набор полей.
 function validateSongData(data, isPartial = false) {
   const errors = [];
   const requiredFields = ['title', 'artist', 'lyrics', 'audioUrl'];
@@ -28,78 +27,126 @@ function validateSongData(data, isPartial = false) {
   return errors;
 }
 
-// GET /songs  — список всех песен, опционально фильтр по artist / genre
-exports.getAllSongs = (req, res) => {
-  let result = Song.getAll();
-  const { artist, genre } = req.query;
+// GET /songs — список всех песен, опционально фильтр по artist / genre,
+// поддерживает пагинацию через ?limit=&offset=
+exports.getAllSongs = async (req, res, next) => {
+  try {
+    const { artist, genre, limit, offset } = req.query;
+    const { Op } = require('sequelize');
+    const where = {};
 
-  if (artist) {
-    result = result.filter((s) => s.artist.toLowerCase().includes(String(artist).toLowerCase()));
-  }
-  if (genre) {
-    result = result.filter((s) => s.genre && s.genre.toLowerCase() === String(genre).toLowerCase());
-  }
+    if (artist) {
+      where.artist = { [Op.iLike]: `%${artist}%` };
+    }
+    if (genre) {
+      where.genre = genre;
+    }
 
-  res.status(200).json(result);
+    const queryOptions = {
+      where,
+      include: [{ model: Playlist, as: 'playlist', attributes: ['id', 'name'] }],
+      order: [['id', 'ASC']]
+    };
+
+    if (limit) queryOptions.limit = Number(limit);
+    if (offset) queryOptions.offset = Number(offset);
+
+    const songs = await Song.findAll(queryOptions);
+    res.status(200).json(songs);
+  } catch (err) {
+    next(err);
+  }
 };
 
 // GET /songs/:id — одна песня по ID
-exports.getSongById = (req, res) => {
-  const id = Number(req.params.id);
-  if (Number.isNaN(id)) {
-    return res.status(400).json({ error: 'ID должен быть числом' });
-  }
+exports.getSongById = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'ID должен быть числом' });
+    }
 
-  const song = Song.getById(id);
-  if (!song) {
-    return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-  }
+    const song = await Song.findByPk(id, {
+      include: [{ model: Playlist, as: 'playlist', attributes: ['id', 'name'] }]
+    });
 
-  res.status(200).json(song);
+    if (!song) {
+      return res.status(404).json({ error: `Песня с id=${id} не найдена` });
+    }
+
+    res.status(200).json(song);
+  } catch (err) {
+    next(err);
+  }
 };
 
 // POST /songs — создание новой песни
-exports.createSong = (req, res) => {
-  const errors = validateSongData(req.body, false);
-  if (errors.length > 0) {
-    return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
-  }
+exports.createSong = async (req, res, next) => {
+  try {
+    const errors = validateSongData(req.body, false);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
+    }
 
-  const newSong = Song.create(req.body);
-  res.status(201).json(newSong);
+    const newSong = await Song.create(req.body);
+    res.status(201).json(newSong);
+  } catch (err) {
+    if (err.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        error: 'Некорректные данные запроса',
+        details: err.errors.map((e) => e.message)
+      });
+    }
+    next(err);
+  }
 };
 
 // PUT /songs/:id — полное обновление песни
-exports.updateSong = (req, res) => {
-  const id = Number(req.params.id);
-  if (Number.isNaN(id)) {
-    return res.status(400).json({ error: 'ID должен быть числом' });
-  }
+exports.updateSong = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'ID должен быть числом' });
+    }
 
-  const errors = validateSongData(req.body, false);
-  if (errors.length > 0) {
-    return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
-  }
+    const errors = validateSongData(req.body, false);
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
+    }
 
-  const updated = Song.update(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-  }
+    const song = await Song.findByPk(id);
+    if (!song) {
+      return res.status(404).json({ error: `Песня с id=${id} не найдена` });
+    }
 
-  res.status(200).json(updated);
+    await song.update(req.body);
+    res.status(200).json(song);
+  } catch (err) {
+    if (err.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        error: 'Некорректные данные запроса',
+        details: err.errors.map((e) => e.message)
+      });
+    }
+    next(err);
+  }
 };
 
 // DELETE /songs/:id — удаление песни
-exports.deleteSong = (req, res) => {
-  const id = Number(req.params.id);
-  if (Number.isNaN(id)) {
-    return res.status(400).json({ error: 'ID должен быть числом' });
-  }
+exports.deleteSong = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'ID должен быть числом' });
+    }
 
-  const success = Song.remove(id);
-  if (!success) {
-    return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-  }
+    const deletedCount = await Song.destroy({ where: { id } });
+    if (deletedCount === 0) {
+      return res.status(404).json({ error: `Песня с id=${id} не найдена` });
+    }
 
-  res.status(204).send();
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
 };
