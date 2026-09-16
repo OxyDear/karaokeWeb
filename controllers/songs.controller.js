@@ -1,152 +1,85 @@
-const { Song, Playlist } = require('/Users/oxydear/Library/CloudStorage/iCloudDrive-iCloudDrive(8.11.25)/com~apple~CloudDocs/Documents/Documents-IvansMacBookPro/IvansMac/IDEs/WebStorm/karaoke/models');
+const songsData = require('../data/songs');
 
-// Валидация данных песни на уровне контроллера (доп. к валидации Sequelize).
-// isPartial=true допускает частичный набор полей.
-function validateSongData(data, isPartial = false) {
-  const errors = [];
-  const requiredFields = ['title', 'artist', 'lyrics', 'audioUrl'];
-
-  if (!isPartial) {
-    requiredFields.forEach((field) => {
-      if (!data[field] || typeof data[field] !== 'string' || data[field].trim() === '') {
-        errors.push(`Поле "${field}" обязательно и должно быть непустой строкой`);
-      }
-    });
-  } else {
-    requiredFields.forEach((field) => {
-      if (field in data && (typeof data[field] !== 'string' || data[field].trim() === '')) {
-        errors.push(`Поле "${field}" должно быть непустой строкой`);
-      }
-    });
-  }
-
-  if ('duration' in data && data.duration !== null && typeof data.duration !== 'number') {
-    errors.push('Поле "duration" должно быть числом (длительность в секундах)');
-  }
-
-  return errors;
+// Небольшой хелпер: секунды -> "мм:сс" для удобного отображения в шаблонах
+function formatDuration(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-// GET /songs — список всех песен, опционально фильтр по artist / genre,
-// поддерживает пагинацию через ?limit=&offset=
-exports.getAllSongs = async (req, res, next) => {
-  try {
-    const { artist, genre, limit, offset } = req.query;
-    const { Op } = require('sequelize');
-    const where = {};
+// GET / — главная страница со списком песен (с опциональным фильтром)
+exports.renderIndex = (req, res) => {
+  const { artist, genre } = req.query;
+  const songs = songsData.getAll({ artist, genre }).map((s) => ({
+    ...s,
+    durationFormatted: formatDuration(s.duration)
+  }));
 
-    if (artist) {
-      where.artist = { [Op.iLike]: `%${artist}%` };
-    }
-    if (genre) {
-      where.genre = genre;
-    }
-
-    const queryOptions = {
-      where,
-      include: [{ model: Playlist, as: 'playlist', attributes: ['id', 'name'] }],
-      order: [['id', 'ASC']]
-    };
-
-    if (limit) queryOptions.limit = Number(limit);
-    if (offset) queryOptions.offset = Number(offset);
-
-    const songs = await Song.findAll(queryOptions);
-    res.status(200).json(songs);
-  } catch (err) {
-    next(err);
-  }
+  res.render('index', {
+    title: 'Каталог песен — Онлайн-караоке',
+    songs,
+    genres: songsData.getAllGenres(),
+    filters: { artist: artist || '', genre: genre || '' },
+    user: req.user
+  });
 };
 
-// GET /songs/:id — одна песня по ID
-exports.getSongById = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      return res.status(400).json({ error: 'ID должен быть числом' });
-    }
+// GET /item/:id — детальная страница песни
+exports.renderItem = (req, res, next) => {
+  const id = Number(req.params.id);
 
-    const song = await Song.findByPk(id, {
-      include: [{ model: Playlist, as: 'playlist', attributes: ['id', 'name'] }]
+  // Некорректный (не числовой) id — сознательно передаём ошибку дальше,
+  // чтобы сработал error-handling middleware (демонстрация 500).
+  if (Number.isNaN(id)) {
+    return next(new Error(`Некорректный идентификатор песни: "${req.params.id}"`));
+  }
+
+  const song = songsData.getById(id);
+
+  // Песни с таким id нет — это штатная ситуация "не найдено", а не ошибка сервера,
+  // поэтому рендерим 404, а не бросаем исключение.
+  if (!song) {
+    return res.status(404).render('404', {
+      title: 'Песня не найдена',
+      url: req.originalUrl
     });
-
-    if (!song) {
-      return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-    }
-
-    res.status(200).json(song);
-  } catch (err) {
-    next(err);
   }
+
+  res.render('item', {
+    title: `${song.title} — ${song.artist}`,
+    song: { ...song, durationFormatted: formatDuration(song.duration) },
+    user: req.user
+  });
 };
 
-// POST /songs — создание новой песни
-exports.createSong = async (req, res, next) => {
-  try {
-    const errors = validateSongData(req.body, false);
-    if (errors.length > 0) {
-      return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
-    }
-
-    const newSong = await Song.create(req.body);
-    res.status(201).json(newSong);
-  } catch (err) {
-    if (err.name === 'SequelizeValidationError') {
-      return res.status(400).json({
-        error: 'Некорректные данные запроса',
-        details: err.errors.map((e) => e.message)
-      });
-    }
-    next(err);
-  }
+// GET /add — форма добавления новой песни
+exports.renderAddForm = (req, res) => {
+  res.render('add', {
+    title: 'Добавить песню',
+    user: req.user,
+    errors: []
+  });
 };
 
-// PUT /songs/:id — полное обновление песни
-exports.updateSong = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      return res.status(400).json({ error: 'ID должен быть числом' });
-    }
+// POST /add — обработка формы, добавление в массив, редирект на главную
+exports.handleAddSong = (req, res) => {
+  const { title, artist, genre, duration, lyrics, audioUrl } = req.body;
 
-    const errors = validateSongData(req.body, false);
-    if (errors.length > 0) {
-      return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
-    }
-
-    const song = await Song.findByPk(id);
-    if (!song) {
-      return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-    }
-
-    await song.update(req.body);
-    res.status(200).json(song);
-  } catch (err) {
-    if (err.name === 'SequelizeValidationError') {
-      return res.status(400).json({
-        error: 'Некорректные данные запроса',
-        details: err.errors.map((e) => e.message)
-      });
-    }
-    next(err);
+  const errors = [];
+  if (!title || !title.trim()) errors.push('Поле "Название" обязательно');
+  if (!artist || !artist.trim()) errors.push('Поле "Исполнитель" обязательно');
+  if (duration && Number.isNaN(Number(duration))) {
+    errors.push('Поле "Длительность" должно быть числом (в секундах)');
   }
-};
 
-// DELETE /songs/:id — удаление песни
-exports.deleteSong = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      return res.status(400).json({ error: 'ID должен быть числом' });
-    }
-
-    const deletedCount = await Song.destroy({ where: { id } });
-    if (deletedCount === 0) {
-      return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-    }
-
-    res.status(204).send();
-  } catch (err) {
-    next(err);
+  if (errors.length > 0) {
+    return res.status(400).render('add', {
+      title: 'Добавить песню',
+      user: req.user,
+      errors
+    });
   }
+
+  songsData.create({ title, artist, genre, duration, lyrics, audioUrl });
+  res.redirect('/');
 };

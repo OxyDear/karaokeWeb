@@ -1,0 +1,37 @@
+<%- include('partials/header') %>
+
+<section class="hero">
+  <h1>Каталог песен</h1>
+  <p>Выбирайте трек, смотрите текст на экране и пойте вместе с залом. Каталог пополняется — предложите свою песню.</p>
+</section>
+
+<form class="filter-bar" method="GET" action="/">
+  <input type="text" name="artist" placeholder="Поиск по исполнителю" value="<%= filters.artist %>">
+  <select name="genre">
+    <option value="">Все жанры</option>
+    <% genres.forEach(function(g) { %>
+      <option value="<%= g %>" <%= filters.genre === g ? 'selected' : '' %>><%= g %></option>
+    <% }); %>
+  </select>
+  <button type="submit">Найти</button>
+</form>
+
+<% if (songs.length === 0) { %>
+  <div class="empty-state">По заданным условиям ничего не найдено. Попробуйте изменить фильтр.</div>
+<% } else { %>
+  <div class="song-list">
+    <% songs.forEach(function(song, i) { %>
+      <a class="song-row" href="/item/<%= song.id %>" style="color:inherit; text-decoration:none;">
+        <span class="song-index"><%= String(i + 1).padStart(2, '0') %></span>
+        <span>
+          <div class="song-title"><%= song.title %></div>
+          <div class="song-artist"><%= song.artist %></div>
+        </span>
+        <span class="tag"><%= song.genre %></span>
+        <span class="duration"><%= song.durationFormatted %></span>
+      </a>
+    <% }); %>
+  </div>
+<% } %>
+
+<%- include('partials/footer') %>
