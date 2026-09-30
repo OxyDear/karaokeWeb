@@ -1,0 +1,25 @@
+<%- include('partials/header') %>
+
+<a class="back-link" href="/">← Назад к каталогу</a>
+
+<div class="detail-card">
+  <h1><%= song.title %></h1>
+  <div class="detail-meta">
+    <span><%= song.artist %></span>
+    <span>·</span>
+    <span class="tag"><%= song.genre %></span>
+    <span>·</span>
+    <span><%= song.durationFormatted %></span>
+    <span>·</span>
+    <span><%= song.playsCount %> исполнений</span>
+  </div>
+
+  <div class="player-stub">
+    <span class="dot"></span>
+    Аудиодорожка (демо): <%= song.audioUrl %>
+  </div>
+
+  <div class="lyrics-box"><%= song.lyrics %></div>
+</div>
+
+<%- include('partials/footer') %>
