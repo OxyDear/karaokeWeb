@@ -1,9 +1,17 @@
 require('dotenv').config();
 
 const express = require('express');
+const expressLayouts = require('express-ejs-layouts');
 const { Sequelize, DataTypes, Op } = require('sequelize');
+const path = require('path');
 const songModel = require('./models/song');
+const errorLogModel = require('./models/errorLog');
+const requestLogModel = require('./models/requestLog');
 const createSongRepository = require('./models/songRepository');
+const createRequestLogger = require('./middleware/logger');
+const { identifyUser } = require('./middleware/auth');
+const { createNotFoundHandler, createServerErrorHandler } = require('./middleware/errorHandlers');
+const songsRoutes = require('./routes/songs.routes');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -11,6 +19,8 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: process.env.DB_DIALECT || 'postgres'
 });
 const Song = songModel(sequelize, DataTypes);
+const ErrorLog = errorLogModel(sequelize, DataTypes);
+const RequestLog = requestLogModel(sequelize, DataTypes);
 const {
     findAll,
     findById,
@@ -19,7 +29,22 @@ const {
     remove
 } = createSongRepository(Song);
 
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.use(expressLayouts);
+app.set('layout', 'layout');
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(identifyUser);
+app.use(createRequestLogger(RequestLog));
+
+app.use('/', songsRoutes);
+
+// Express 4 не передаёт ошибки из async-обработчиков в error-handling middleware,
+// поэтому оборачиваем их: отклонённый промис -> next(err) -> запись в БД + ответ 500.
+const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 const parseId = (value) => {
     const id = Number(value);
@@ -68,7 +93,7 @@ const songData = (data) => ({
     audioUrl: data.audioUrl.trim()
 });
 
-app.get('/songs', async (req, res) => {
+app.get('/songs', wrap(async (req, res) => {
     const { artist, genre } = req.query;
     const where = {};
 
@@ -81,9 +106,9 @@ app.get('/songs', async (req, res) => {
     }
 
     res.json(await findAll(where));
-});
+}));
 
-app.get('/songs/:id', async (req, res) => {
+app.get('/songs/:id', wrap(async (req, res) => {
     const id = parseId(req.params.id);
 
     if (id === null) {
@@ -97,9 +122,9 @@ app.get('/songs/:id', async (req, res) => {
     }
 
     res.json(song);
-});
+}));
 
-app.post('/songs', async (req, res) => {
+app.post('/songs', wrap(async (req, res) => {
     const validationError = validateSong(req.body);
 
     if (validationError) {
@@ -107,9 +132,9 @@ app.post('/songs', async (req, res) => {
     }
 
     res.status(201).json(await create(songData(req.body)));
-});
+}));
 
-app.put('/songs/:id', async (req, res) => {
+app.put('/songs/:id', wrap(async (req, res) => {
     const id = parseId(req.params.id);
 
     if (id === null) {
@@ -129,9 +154,9 @@ app.put('/songs/:id', async (req, res) => {
     }
 
     res.json(song);
-});
+}));
 
-app.delete('/songs/:id', async (req, res) => {
+app.delete('/songs/:id', wrap(async (req, res) => {
     const id = parseId(req.params.id);
 
     if (id === null) {
@@ -143,11 +168,9 @@ app.delete('/songs/:id', async (req, res) => {
     }
 
     res.status(204).send();
-});
+}));
 
-app.use((req, res) => {
-    res.status(404).json({ error: 'Маршрут не найден' });
-});
+app.use(createNotFoundHandler(ErrorLog));
 
 app.use((error, req, res, next) => {
     if (error instanceof SyntaxError && error.status === 400 && error.body) {
@@ -157,11 +180,8 @@ app.use((error, req, res, next) => {
     next(error);
 });
 
-app.use((error, req, res, next) => {
-    console.error(error);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-});
+app.use(createServerErrorHandler(ErrorLog));
 
 app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    console.log(`Server running on http://localhost:${port}`);
 });

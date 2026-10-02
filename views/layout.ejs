@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= title %> · Караоке.онлайн</title>
+  <title><%= typeof title !== 'undefined' ? title : 'Каталог' %> · Караоке.онлайн</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -21,4 +21,15 @@
       </nav>
     </div>
   </header>
+
   <main class="wrap">
+    <%- body %>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      Учебный проект «Онлайн-караоке» · ПЗ №1 «Middleware и шаблонизаторы» · ветка pz21
+    </div>
+  </footer>
+</body>
+</html>

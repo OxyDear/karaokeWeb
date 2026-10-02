@@ -1,10 +1,28 @@
-// Логирующее middleware.
-// Выводит в консоль метод запроса, URL и время запроса.
-// Подключается через app.use() до маршрутов, поэтому срабатывает на КАЖДЫЙ запрос.
-function requestLogger(req, res, next) {
-  const time = new Date().toISOString();
-  console.log(`[${time}] ${req.method} ${req.originalUrl}`);
-  next(); // обязательно передаём управление дальше, иначе запрос "зависнет"
+
+function createRequestLogger(RequestLog) {
+  return function requestLogger(req, res, next) {
+    const start = Date.now();
+    console.log(`[${new Date(start).toISOString()}] ${req.method} ${req.originalUrl}`);
+
+    res.on('finish', () => {
+      if (req.path === '/favicon.ico') {
+        return;
+      }
+
+      RequestLog.create({
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: res.statusCode,
+        durationMs: Date.now() - start,
+        ip: req.ip,
+        userName: req.user ? req.user.name : null
+      }).catch((dbError) => {
+        console.error('Не удалось записать лог запроса в БД:', dbError.message);
+      });
+    });
+
+    next();
+  };
 }
 
-module.exports = requestLogger;
+module.exports = createRequestLogger;

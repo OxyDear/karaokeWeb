@@ -1,9 +1,6 @@
-<%- include('partials/header') %>
-
 <a class="back-link" href="/">← Назад к каталогу</a>
 
 <h1>Добавить песню</h1>
-<p style="color: var(--text-dim); margin-top: -8px;">Вы вошли как: <strong><%= user.name %></strong></p>
 
 <% if (errors && errors.length > 0) { %>
   <div class="error-box">
@@ -48,5 +45,3 @@
 
   <button type="submit" class="btn-primary">Добавить в каталог</button>
 </form>
-
-<%- include('partials/footer') %>

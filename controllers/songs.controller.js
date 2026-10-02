@@ -1,13 +1,11 @@
 const songsData = require('../data/songs');
 
-// Небольшой хелпер: секунды -> "мм:сс" для удобного отображения в шаблонах
 function formatDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-// GET / — главная страница со списком песен (с опциональным фильтром)
 exports.renderIndex = (req, res) => {
   const { artist, genre } = req.query;
   const songs = songsData.getAll({ artist, genre }).map((s) => ({
@@ -24,25 +22,18 @@ exports.renderIndex = (req, res) => {
   });
 };
 
-// GET /item/:id — детальная страница песни
 exports.renderItem = (req, res, next) => {
   const id = Number(req.params.id);
 
-  // Некорректный (не числовой) id — сознательно передаём ошибку дальше,
-  // чтобы сработал error-handling middleware (демонстрация 500).
   if (Number.isNaN(id)) {
     return next(new Error(`Некорректный идентификатор песни: "${req.params.id}"`));
   }
 
   const song = songsData.getById(id);
 
-  // Песни с таким id нет — это штатная ситуация "не найдено", а не ошибка сервера,
-  // поэтому рендерим 404, а не бросаем исключение.
+
   if (!song) {
-    return res.status(404).render('404', {
-      title: 'Песня не найдена',
-      url: req.originalUrl
-    });
+    return next();
   }
 
   res.render('item', {
@@ -52,7 +43,6 @@ exports.renderItem = (req, res, next) => {
   });
 };
 
-// GET /add — форма добавления новой песни
 exports.renderAddForm = (req, res) => {
   res.render('add', {
     title: 'Добавить песню',
@@ -61,7 +51,6 @@ exports.renderAddForm = (req, res) => {
   });
 };
 
-// POST /add — обработка формы, добавление в массив, редирект на главную
 exports.handleAddSong = (req, res) => {
   const { title, artist, genre, duration, lyrics, audioUrl } = req.body;
 

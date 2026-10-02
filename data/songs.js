@@ -1,65 +1,90 @@
-// Данные хранятся в обычном массиве в оперативной памяти сервера.
-// При перезапуске сервера массив пересоздаётся с начальными (seed) значениями.
 
-let nextId = 6;
+const LYRICS_STUB = 'Текст песни для караоке...';
 
 const songs = [
   {
     id: 1,
-    title: 'Ночной эфир',
-    artist: 'Городские огни',
-    genre: 'Поп',
-    duration: 214,
-    lyrics:
-      'Куплет 1:\nГород засыпает, зажигая фонари,\nМы поём мелодию до самой зари.\n\nПрипев:\nНочной эфир, только ты и я,\nМикрофон в руках — это жизнь моя.',
-    audioUrl: '/audio/night-air-demo.mp3',
-    playsCount: 128
+    title: "Sweet Child O' Mine",
+    artist: "Guns N' Roses",
+    genre: 'Rock',
+    duration: 356,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/sweet-child-o-mine.mp3',
+    playsCount: 0
   },
   {
     id: 2,
-    title: 'Дорога домой',
-    artist: 'Северный ветер',
-    genre: 'Рок',
-    duration: 187,
-    lyrics:
-      'Куплет 1:\nАсфальт под колёсами, огни вдоль дорог,\nЯ пел эту песню, чтобы кто-то помог.\n\nПрипев:\nДорога домой длиннее, чем кажется,\nНо голос звучит — и путь не теряется.',
-    audioUrl: '/audio/road-home-demo.mp3',
-    playsCount: 342
+    title: 'Billie Jean',
+    artist: 'Michael Jackson',
+    genre: 'Pop',
+    duration: 294,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/billie-jean.mp3',
+    playsCount: 0
   },
   {
     id: 3,
-    title: 'Летний дождь',
-    artist: 'Аня Светлова',
-    genre: 'Поп',
-    duration: 201,
-    lyrics:
-      'Куплет 1:\nКапли стучат по крыше, лето в самом разгаре,\nМы поём под дождём, забыв о всяком угаре.\n\nПрипев:\nЛетний дождь смывает грусть без следа,\nПой со мной — и не будет беды.',
-    audioUrl: '/audio/summer-rain-demo.mp3',
-    playsCount: 97
+    title: 'Hotel California',
+    artist: 'Eagles',
+    genre: 'Rock',
+    duration: 391,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/hotel-california.mp3',
+    playsCount: 0
   },
   {
     id: 4,
-    title: 'Электрический пульс',
-    artist: 'NEON WAVE',
-    genre: 'Электро',
-    duration: 176,
-    lyrics:
-      'Куплет 1:\nОгни танцпола, ритм внутри,\nМикрофон включён — держись, гори!\n\nПрипев:\nЭлектрический пульс качает зал,\nКаждый в этой песне — сам вокал.',
-    audioUrl: '/audio/electric-pulse-demo.mp3',
-    playsCount: 256
+    title: 'Someone Like You',
+    artist: 'Adele',
+    genre: 'Ballad',
+    duration: 285,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/someone-like-you.mp3',
+    playsCount: 0
   },
   {
     id: 5,
-    title: 'Тихая гавань',
-    artist: 'Морской бриз',
-    genre: 'Баллада',
-    duration: 245,
-    lyrics:
-      'Куплет 1:\nВолны качают лодку у причала,\nПесня для тех, кто устал от начала.\n\nПрипев:\nТихая гавань, где можно спеть,\nГолос найдёт, куда лететь.',
-    audioUrl: '/audio/quiet-harbor-demo.mp3',
-    playsCount: 64
+    title: 'Blinding Lights',
+    artist: 'The Weeknd',
+    genre: 'Pop',
+    duration: 200,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/blinding-lights.mp3',
+    playsCount: 0
+  },
+  {
+    id: 6,
+    title: 'Smells Like Teen Spirit',
+    artist: 'Nirvana',
+    genre: 'Rock',
+    duration: 301,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/smells-like-teen-spirit.mp3',
+    playsCount: 0
+  },
+  {
+    id: 7,
+    title: "Don't Stop Believin'",
+    artist: 'Journey',
+    genre: 'Rock',
+    duration: 251,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/dont-stop-believin.mp3',
+    playsCount: 0
+  },
+  {
+    id: 8,
+    title: 'Uptown Funk',
+    artist: 'Mark Ronson ft. Bruno Mars',
+    genre: 'Pop',
+    duration: 270,
+    lyrics: LYRICS_STUB,
+    audioUrl: 'https://example.com/audio/uptown-funk.mp3',
+    playsCount: 0
   }
 ];
+
+let nextId = songs.length + 1;
 
 function getAll({ artist, genre } = {}) {
   let result = songs;
