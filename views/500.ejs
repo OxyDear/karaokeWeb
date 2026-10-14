@@ -1,0 +1,11 @@
+<%- include('partials/header') %>
+
+<div class="status-page">
+  <div class="code" style="color: var(--error);">500</div>
+  <h1>Что-то пошло не так</h1>
+  <p>Сервер столкнулся с внутренней ошибкой при обработке запроса. Мы уже записали её в лог.</p>
+  <p style="font-family: 'Fraunces', serif; color: var(--text-dim);">«<%= message %>»</p>
+  <p><a href="/">← Вернуться в каталог</a></p>
+</div>
+
+<%- include('partials/footer') %>

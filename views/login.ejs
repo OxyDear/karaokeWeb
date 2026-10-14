@@ -1,0 +1,17 @@
+<%- include('partials/header') %>
+
+<div class="status-page">
+  <h1>Нужен вход</h1>
+  <p>
+    Эта страница защищена middleware имитации авторизации. Настоящей системы логина в лабораторной
+    работе нет — вместо неё сервер считает вас авторизованным, если в адресной строке присутствует
+    параметр <code>?auth=1</code>.
+  </p>
+  <p>
+    <a class="btn-primary" style="display:inline-block; text-decoration:none;" href="/add?auth=1">
+      Открыть форму добавления песни (с ?auth=1)
+    </a>
+  </p>
+</div>
+
+<%- include('partials/footer') %>

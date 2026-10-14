@@ -1,105 +1,85 @@
-const Song = require('../models/songs.model');
+const songsData = require('../data/songs');
 
-// Валидация данных песни. isPartial=true допускает частичный набор полей
-// (например, для PUT можно потребовать все поля, но здесь для гибкости
-// проверяем только те, что переданы, плюс обязательный набор при создании).
-function validateSongData(data, isPartial = false) {
-  const errors = [];
-  const requiredFields = ['title', 'artist', 'lyrics', 'audioUrl'];
-
-  if (!isPartial) {
-    requiredFields.forEach((field) => {
-      if (!data[field] || typeof data[field] !== 'string' || data[field].trim() === '') {
-        errors.push(`Поле "${field}" обязательно и должно быть непустой строкой`);
-      }
-    });
-  } else {
-    requiredFields.forEach((field) => {
-      if (field in data && (typeof data[field] !== 'string' || data[field].trim() === '')) {
-        errors.push(`Поле "${field}" должно быть непустой строкой`);
-      }
-    });
-  }
-
-  if ('duration' in data && data.duration !== null && typeof data.duration !== 'number') {
-    errors.push('Поле "duration" должно быть числом (длительность в секундах)');
-  }
-
-  return errors;
+// Небольшой хелпер: секунды -> "мм:сс" для удобного отображения в шаблонах
+function formatDuration(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-// GET /songs  — список всех песен, опционально фильтр по artist / genre
-exports.getAllSongs = (req, res) => {
-  let result = Song.getAll();
+// GET / — главная страница со списком песен (с опциональным фильтром)
+exports.renderIndex = (req, res) => {
   const { artist, genre } = req.query;
+  const songs = songsData.getAll({ artist, genre }).map((s) => ({
+    ...s,
+    durationFormatted: formatDuration(s.duration)
+  }));
 
-  if (artist) {
-    result = result.filter((s) => s.artist.toLowerCase().includes(String(artist).toLowerCase()));
-  }
-  if (genre) {
-    result = result.filter((s) => s.genre && s.genre.toLowerCase() === String(genre).toLowerCase());
-  }
-
-  res.status(200).json(result);
+  res.render('index', {
+    title: 'Каталог песен — Онлайн-караоке',
+    songs,
+    genres: songsData.getAllGenres(),
+    filters: { artist: artist || '', genre: genre || '' },
+    user: req.user
+  });
 };
 
-// GET /songs/:id — одна песня по ID
-exports.getSongById = (req, res) => {
+// GET /item/:id — детальная страница песни
+exports.renderItem = (req, res, next) => {
   const id = Number(req.params.id);
+
+  // Некорректный (не числовой) id — сознательно передаём ошибку дальше,
+  // чтобы сработал error-handling middleware (демонстрация 500).
   if (Number.isNaN(id)) {
-    return res.status(400).json({ error: 'ID должен быть числом' });
+    return next(new Error(`Некорректный идентификатор песни: "${req.params.id}"`));
   }
 
-  const song = Song.getById(id);
+  const song = songsData.getById(id);
+
+  // Песни с таким id нет — это штатная ситуация "не найдено", а не ошибка сервера,
+  // поэтому рендерим 404, а не бросаем исключение.
   if (!song) {
-    return res.status(404).json({ error: `Песня с id=${id} не найдена` });
+    return res.status(404).render('404', {
+      title: 'Песня не найдена',
+      url: req.originalUrl
+    });
   }
 
-  res.status(200).json(song);
+  res.render('item', {
+    title: `${song.title} — ${song.artist}`,
+    song: { ...song, durationFormatted: formatDuration(song.duration) },
+    user: req.user
+  });
 };
 
-// POST /songs — создание новой песни
-exports.createSong = (req, res) => {
-  const errors = validateSongData(req.body, false);
+// GET /add — форма добавления новой песни
+exports.renderAddForm = (req, res) => {
+  res.render('add', {
+    title: 'Добавить песню',
+    user: req.user,
+    errors: []
+  });
+};
+
+// POST /add — обработка формы, добавление в массив, редирект на главную
+exports.handleAddSong = (req, res) => {
+  const { title, artist, genre, duration, lyrics, audioUrl } = req.body;
+
+  const errors = [];
+  if (!title || !title.trim()) errors.push('Поле "Название" обязательно');
+  if (!artist || !artist.trim()) errors.push('Поле "Исполнитель" обязательно');
+  if (duration && Number.isNaN(Number(duration))) {
+    errors.push('Поле "Длительность" должно быть числом (в секундах)');
+  }
+
   if (errors.length > 0) {
-    return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
+    return res.status(400).render('add', {
+      title: 'Добавить песню',
+      user: req.user,
+      errors
+    });
   }
 
-  const newSong = Song.create(req.body);
-  res.status(201).json(newSong);
-};
-
-// PUT /songs/:id — полное обновление песни
-exports.updateSong = (req, res) => {
-  const id = Number(req.params.id);
-  if (Number.isNaN(id)) {
-    return res.status(400).json({ error: 'ID должен быть числом' });
-  }
-
-  const errors = validateSongData(req.body, false);
-  if (errors.length > 0) {
-    return res.status(400).json({ error: 'Некорректные данные запроса', details: errors });
-  }
-
-  const updated = Song.update(id, req.body);
-  if (!updated) {
-    return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-  }
-
-  res.status(200).json(updated);
-};
-
-// DELETE /songs/:id — удаление песни
-exports.deleteSong = (req, res) => {
-  const id = Number(req.params.id);
-  if (Number.isNaN(id)) {
-    return res.status(400).json({ error: 'ID должен быть числом' });
-  }
-
-  const success = Song.remove(id);
-  if (!success) {
-    return res.status(404).json({ error: `Песня с id=${id} не найдена` });
-  }
-
-  res.status(204).send();
+  songsData.create({ title, artist, genre, duration, lyrics, audioUrl });
+  res.redirect('/');
 };
