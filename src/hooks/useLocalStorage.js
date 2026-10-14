@@ -41,8 +41,9 @@ export function useLocalStorage(key, initialValue, { loadDelay = 1000, debounce 
     }, loadDelay)
 
     return () => clearTimeout(timerId)
+    // Пустой массив: эффект выполняется один раз — при монтировании.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [])
 
   // Эффект №2 — сохранение при каждом изменении value с debounce.
   // Cleanup сбрасывает предыдущий таймер, поэтому запись происходит
