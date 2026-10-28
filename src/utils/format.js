@@ -14,7 +14,3 @@ export function formatTotal(totalSeconds) {
   const m = minutes % 60
   return `${h} ч ${String(m).padStart(2, '0')} мин`
 }
-
-export function makeId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}

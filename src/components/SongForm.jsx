@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const EMPTY = { title: '', artist: '', genre: '', duration: '', lyrics: '' }
+const EMPTY = { title: '', artist: '', genre: '', duration: '', lyrics: '', audioUrl: '' }
 
 // Контролируемая форма: значения полей хранятся в useState.
 // editingSong != null — режим редактирования, иначе — добавления.
@@ -12,9 +12,10 @@ export default function SongForm({ editingSong, onSubmit, onCancel }) {
       ? {
           title: editingSong.title,
           artist: editingSong.artist,
-          genre: editingSong.genre,
-          duration: String(editingSong.duration || ''),
+          genre: editingSong.genre || '',
+          duration: String(editingSong.duration ?? ''),
           lyrics: editingSong.lyrics,
+          audioUrl: editingSong.audioUrl,
         }
       : EMPTY,
   )
@@ -29,12 +30,13 @@ export default function SongForm({ editingSong, onSubmit, onCancel }) {
   const handleSubmit = (e) => {
     e.preventDefault()
 
-    if (!fields.title.trim() || !fields.artist.trim()) {
-      setError('Поля «Название» и «Исполнитель» обязательны')
+    // Те же обязательные поля, что проверяет сервер (validateSong в server.js)
+    if (!fields.title.trim() || !fields.artist.trim() || !fields.lyrics.trim() || !fields.audioUrl.trim()) {
+      setError('Поля «Название», «Исполнитель», «Текст песни» и «Ссылка на аудио» обязательны')
       return
     }
-    const duration = fields.duration === '' ? 0 : Number(fields.duration)
-    if (!Number.isFinite(duration) || duration < 0) {
+    const duration = fields.duration === '' ? null : Number(fields.duration)
+    if (duration !== null && (!Number.isFinite(duration) || duration < 0)) {
       setError('Длительность должна быть неотрицательным числом (в секундах)')
       return
     }
@@ -42,9 +44,10 @@ export default function SongForm({ editingSong, onSubmit, onCancel }) {
     onSubmit({
       title: fields.title.trim(),
       artist: fields.artist.trim(),
-      genre: fields.genre.trim() || 'Без жанра',
-      duration: Math.round(duration),
+      genre: fields.genre.trim() || null,
+      duration: duration === null ? null : Math.round(duration),
       lyrics: fields.lyrics.trim(),
+      audioUrl: fields.audioUrl.trim(),
     })
     setFields(EMPTY)
     setError('')
@@ -82,6 +85,11 @@ export default function SongForm({ editingSong, onSubmit, onCancel }) {
           <input name="duration" type="number" min="0" value={fields.duration} onChange={handleChange} placeholder="210" />
         </label>
       </div>
+
+      <label>
+        Ссылка на аудио
+        <input name="audioUrl" value={fields.audioUrl} onChange={handleChange} placeholder="https://example.com/audio/song.mp3" />
+      </label>
 
       <label>
         Текст песни
