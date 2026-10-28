@@ -8,6 +8,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 const express = require('express');
+const cors = require('cors');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 const songModel = require('./models/song');
 const createSongRepository = require('./models/songRepository');
@@ -29,10 +30,20 @@ const {
     findById,
     create,
     update,
-    remove
+    remove,
+    findGenres,
+    incrementPlays
 } = createSongRepository(Song);
 const User = userModel(sequelize, DataTypes);
 const userRepository = createUserRepository(User);
+
+// CORS: React-клиент (Vite, :5173) живёт на другом origin, чем API (:3000).
+// CORS_ORIGIN — список разрешённых origin через запятую; если не задан, разрешены все.
+const corsOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+app.use(cors(corsOrigins.length ? { origin: corsOrigins } : undefined));
 
 app.use(express.json());
 
@@ -84,7 +95,7 @@ const songData = (data) => ({
 });
 
 app.get('/songs', asyncHandler(async (req, res) => {
-    const { artist, genre } = req.query;
+    const { artist, genre, search } = req.query;
     const where = {};
 
     if (artist) {
@@ -95,7 +106,21 @@ app.get('/songs', asyncHandler(async (req, res) => {
         where.genre = genre;
     }
 
+    // Поиск для React-клиента: подстрока в названии ИЛИ исполнителе (без учёта регистра)
+    if (typeof search === 'string' && search.trim()) {
+        const pattern = `%${search.trim()}%`;
+        where[Op.or] = [
+            { title: { [Op.iLike]: pattern } },
+            { artist: { [Op.iLike]: pattern } }
+        ];
+    }
+
     res.json(await findAll(where));
+}));
+
+// Список жанров для фильтра. Объявлен ДО '/songs/:id', иначе "genres" попадёт в :id.
+app.get('/songs/genres', asyncHandler(async (req, res) => {
+    res.json(await findGenres());
 }));
 
 app.get('/songs/:id', asyncHandler(async (req, res) => {
@@ -138,6 +163,24 @@ app.put('/songs/:id', authenticate, isAdmin, asyncHandler(async (req, res) => {
     }
 
     const song = await update(id, songData(req.body));
+
+    if (!song) {
+        return res.status(404).json({ error: 'Песня не найдена' });
+    }
+
+    res.json(song);
+}));
+
+// «Спеть песню»: атомарно увеличивает счётчик исполнений. Доступно любому
+// авторизованному пользователю (в отличие от PUT/DELETE, которые только для admin).
+app.post('/songs/:id/play', authenticate, asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+
+    if (id === null) {
+        return res.status(400).json({ error: 'Некорректный ID песни' });
+    }
+
+    const song = await incrementPlays(id);
 
     if (!song) {
         return res.status(404).json({ error: 'Песня не найдена' });

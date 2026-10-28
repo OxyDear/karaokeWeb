@@ -95,3 +95,52 @@ client/src/
 - Доп. эффекты: debounce-автосохранение 500 мс, имитация загрузки с сервера 1 с, `document.title` с числом песен, статистика.
 - Обработка пустого/повреждённого localStorage — инициализация начальными данными.
 - Горячие клавиши: Enter — отправка формы, Esc — отмена редактирования.
+
+---
+
+# ЛР №5. Взаимодействие React-приложения с сервером (ветка `25`)
+
+Клиент (`client/`) переведён с `localStorage` на работу с собственным REST API (Node.js + Express + PostgreSQL + JWT).
+
+## Запуск
+
+```bash
+# 1. Сервер (корень проекта)
+cp .env.example .env          # заполнить DATABASE_URL и JWT_SECRET
+npm install                   # появилась новая зависимость cors
+npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all   # админ: admin@karaoke.local / admin12345
+npm run dev                   # http://localhost:3000
+
+# 2. Клиент
+cd client
+npm install                   # появилась новая зависимость axios
+cp .env.example .env          # VITE_API_URL=http://localhost:3000
+npm run dev                   # http://localhost:5173
+```
+
+Чтобы увидеть спиннер и состояния загрузки, в `client/.env` задайте `VITE_API_DELAY=1500`.
+Чтобы увидеть ошибку «сервер недоступен» — остановите сервер и нажмите «Повторить».
+
+## Что реализовано
+
+| Требование | Где |
+|---|---|
+| Сервис API на axios, JWT-перехватчик, обработка ошибок | `client/src/api.js` |
+| GET списка с индикатором загрузки, ошибкой и кнопкой «Повторить» | `SongList.jsx` |
+| POST с оптимистичным обновлением (временный id → настоящий, откат при ошибке) | `SongList.jsx` → `addSong` |
+| DELETE с оптимистичным удалением и возвратом при ошибке | `SongList.jsx` → `deleteSong` |
+| PUT (редактирование) с оптимистичным обновлением и откатом | `SongList.jsx` → `updateSong` |
+| Вход/регистрация, JWT в `localStorage` | `AuthPanel.jsx`, `api.js` |
+| **Доп. улучшение:** серверный поиск + debounce 400 мс + отмена устаревших запросов (`AbortController`) | `useDebounce.js`, `SongList.jsx`, `GET /songs?search=` |
+
+## Изменения на сервере
+
+- `cors` middleware (`CORS_ORIGIN` в `.env` — список разрешённых origin, по умолчанию разрешены все).
+- `GET /songs?search=` — поиск по названию или исполнителю (`iLike`), комбинируется с `genre`.
+- `GET /songs/genres` — список жанров для фильтра.
+- `POST /songs/:id/play` — «Спеть»: атомарно увеличивает `playsCount` (нужен JWT, роль любая).
+
+## Права доступа
+
+- Просмотр каталога — без входа. Добавление песен и «Спеть» — любой вошедший пользователь.
+- Редактирование и удаление — только `admin` (так настроен сервер; кнопки в UI показываются только админу).
