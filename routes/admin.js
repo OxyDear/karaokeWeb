@@ -1,5 +1,6 @@
 const express = require('express');
 const asyncHandler = require('../middleware/asyncHandler');
+const { parseObjectId } = require('../utils/objectId');
 
 const ROLES = ['user', 'admin'];
 
@@ -14,10 +15,10 @@ module.exports = (userRepository) => {
 
     // PATCH /admin/users/:id/role — сменить роль пользователя. Тело: { "role": "admin" }
     router.patch('/users/:id/role', asyncHandler(async (req, res) => {
-        const id = Number(req.params.id);
+        const id = parseObjectId(req.params.id);
         const role = req.body && req.body.role;
 
-        if (!Number.isInteger(id) || id < 1) {
+        if (id === null) {
             return res.status(400).json({ error: 'Некорректный ID пользователя' });
         }
 
@@ -26,7 +27,7 @@ module.exports = (userRepository) => {
         }
 
         // Защита от «самоблокировки»: админ не может сам себя разжаловать
-        if (id === req.user.id) {
+        if (id === String(req.user.id)) {
             return res.status(400).json({ error: 'Нельзя изменить собственную роль' });
         }
 

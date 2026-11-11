@@ -1,34 +1,21 @@
 'use strict';
 
-module.exports = (sequelize, DataTypes) => {
-    const User = sequelize.define('User', {
-        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        email: {
-            type: DataTypes.STRING,
-            allowNull: false,
-            unique: true
-        },
-        passwordHash: { type: DataTypes.STRING, allowNull: false },
-        // Роль для RBAC (дополнительный механизм): 'user' или 'admin'
-        role: {
-            type: DataTypes.STRING,
-            allowNull: false,
-            defaultValue: 'user',
-            validate: { isIn: [['user', 'admin']] }
-        }
-    }, {
-        tableName: 'users'
-    });
+const mongoose = require('mongoose');
+const jsonOptions = require('./jsonOptions');
 
-    User.ROLES = ['user', 'admin'];
+const userSchema = new mongoose.Schema({
+    // unique: true создаёт уникальный индекс в MongoDB (защита от дублей email)
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    passwordHash: { type: String, required: true },
+    // Роль для RBAC: 'user' или 'admin'
+    role: { type: String, enum: ['user', 'admin'], default: 'user', required: true }
+}, {
+    timestamps: true,
+    // Хеш пароля никогда не попадает в JSON-ответ
+    toJSON: jsonOptions((ret) => { delete ret.passwordHash; })
+});
 
-    // Страховка: даже если где-то случайно сделать res.json(user),
-    // хеш пароля в ответ не попадёт.
-    User.prototype.toJSON = function () {
-        const values = { ...this.get() };
-        delete values.passwordHash;
-        return values;
-    };
+const User = mongoose.model('User', userSchema);
+User.ROLES = ['user', 'admin'];
 
-    return User;
-};
+module.exports = User;

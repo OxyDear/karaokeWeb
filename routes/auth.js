@@ -44,8 +44,8 @@ module.exports = (userRepository) => {
             return res.status(201).json(user);
         } catch (error) {
             // Два одновременных запроса с одним email: проверка выше обоих пропустит,
-            // а уникальный индекс в БД остановит второй.
-            if (error.name === 'SequelizeUniqueConstraintError') {
+            // а уникальный индекс в MongoDB остановит второй (код ошибки 11000 — duplicate key).
+            if (error.code === 11000) {
                 return res.status(409).json({ error: 'Пользователь с таким email уже существует' });
             }
 

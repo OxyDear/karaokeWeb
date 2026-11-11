@@ -144,3 +144,87 @@ npm run dev                   # http://localhost:5173
 
 - Просмотр каталога — без входа. Добавление песен и «Спеть» — любой вошедший пользователь.
 - Редактирование и удаление — только `admin` (так настроен сервер; кнопки в UI показываются только админу).
+
+---
+
+# ЛР №6. Интеграция с NoSQL базой данных MongoDB (ветка `26`)
+
+Серверная часть переведена с PostgreSQL + Sequelize на **MongoDB + Mongoose**. API для React-клиента
+остался прежним (те же маршруты, в ответах то же поле `id`), добавлены теги и отзывы — вложенные структуры.
+
+## Запуск
+
+```bash
+# 1. MongoDB: Atlas (бесплатный кластер M0) или локально (MongoDB Community Edition)
+#    В .env укажите MONGO_URI (шаблон — в .env.example). DATABASE_URL больше не нужен.
+cp .env.example .env          # если .env ещё нет; иначе просто добавьте в него MONGO_URI
+
+# 2. Сервер (корень проекта)
+npm install                   # появился mongoose, убраны sequelize/pg
+npm run seed                  # админ admin@karaoke.local / admin12345 + 3 песни (можно запускать повторно)
+npm run dev                   # http://localhost:3000
+
+# 3. Клиент (по желанию)
+cd client && npm install && npm run dev    # http://localhost:5173
+```
+
+Atlas: Database → Create (M0) → Database Access (пользователь + пароль) → Network Access (добавить свой IP
+или `0.0.0.0/0` для учёбы) → Connect → Drivers → скопировать строку подключения в `MONGO_URI`
+(подставить пароль и имя базы `karaoke` перед `?`).
+
+## Что изменилось
+
+| Файл | Что |
+|---|---|
+| `db.js` | подключение `mongoose.connect(process.env.MONGO_URI)` |
+| `models/song.js` | схема и модель `Song`: вложенный массив `reviews` (subdocument), массив `tags`, индексы, виртуальные поля `averageRating`/`reviewsCount`, метод экземпляра `addReview`, статический `findByTag` |
+| `models/user.js` | схема `User` (уникальный индекс по `email`, роль) |
+| `models/*Repository.js` | запросы Mongoose вместо Sequelize (`find`, `findByIdAndUpdate`, `$inc`, `$push`, `$pull`, позиционный `$`) |
+| `server.js` | те же маршруты `/songs`, + теги и отзывы, обработка ошибок Mongoose, старт после подключения к БД |
+| `seed.js` | замена `migrations/` и `seeders/` (в MongoDB миграции схемы не нужны) |
+| `utils/objectId.js` | проверка формата ObjectId (вместо `Number(id)`) |
+| `client/.../SongList.jsx` | сортировка «по добавлению» работала с числовым id; теперь id — строка ObjectId |
+
+## Маршруты
+
+CRUD песен: `GET /songs` (фильтры `?search=`, `?genre=`, `?artist=`, `?tag=`), `GET /songs/:id`,
+`POST /songs`, `PUT /songs/:id` (admin), `DELETE /songs/:id` (admin, возвращает удалённый документ),
+`POST /songs/:id/play`, `GET /songs/genres`, `GET /songs/tags`.
+
+Вложенный массив `reviews`:
+
+| Метод | Путь | Операция MongoDB |
+|---|---|---|
+| GET | `/songs/:id/reviews` | чтение массива |
+| POST | `/songs/:id/reviews` | `$push` — добавить отзыв `{ "rating": 5, "comment": "..." }` |
+| PUT | `/songs/:id/reviews/:reviewId` | `$set` + позиционный `$` — изменить элемент массива |
+| POST | `/songs/:id/reviews/:reviewId/like` | `$inc` + `$` — +1 к `likes` внутри элемента массива |
+| DELETE | `/songs/:id/reviews/:reviewId` | `$pull` — удалить элемент |
+
+Отзывы добавляет любой вошедший пользователь; менять и удалять — автор или admin.
+
+## Реляционная и документная модель на примере проекта
+
+PostgreSQL: таблицы `songs`, `reviews` (FK `songId`), `tags`, `song_tags` — песня со всем содержимым собирается через JOIN.
+MongoDB: один документ в коллекции `songs`:
+
+```json
+{
+  "_id": "665f...",
+  "title": "Bohemian Rhapsody", "artist": "Queen", "genre": "Rock", "playsCount": 0,
+  "tags": ["рок", "классика"],
+  "reviews": [
+    { "_id": "665f...", "userId": "...", "rating": 5, "comment": "Легенда!", "likes": 2 }
+  ]
+}
+```
+
+Отзывы — часть песни: читаются одним запросом и удаляются вместе с ней (каскад не нужен).
+Минус: если отзывов будут тысячи, документ разрастётся (лимит 16 МБ) — тогда их выносят в отдельную коллекцию и используют `populate`.
+
+## Проверка в Postman
+
+1. `POST /auth/login` `{ "email": "admin@karaoke.local", "password": "admin12345" }` → скопировать `token`.
+2. Дальше везде заголовок `Authorization: Bearer <token>`.
+3. `GET /songs` → взять `id`; `POST /songs/:id/reviews` `{ "rating": 5, "comment": "ок" }`; затем `PUT`/`like`/`DELETE` по `reviewId` из ответа.
+4. В Compass / Atlas Data Explorer: база `karaoke`, коллекция `songs` — видно вложенные `reviews` и `tags`.

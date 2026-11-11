@@ -1,21 +1,18 @@
 'use strict';
 
+const { parseObjectId } = require('../utils/objectId');
+
 module.exports = (User) => ({
-    findByEmail: (email) => User.findOne({ where: { email } }),
+    findByEmail: (email) => User.findOne({ email }),
 
-    findById: (id) => User.findByPk(id),
+    findById: async (id) => {
+        const objectId = parseObjectId(String(id));
+        return objectId ? User.findById(objectId) : null;
+    },
 
-    findAll: () => User.findAll({ order: [['id', 'ASC']] }),
+    findAll: () => User.find().sort({ _id: 1 }),
 
     create: (data) => User.create(data),
 
-    updateRole: async (id, role) => {
-        const user = await User.findByPk(id);
-
-        if (!user) {
-            return null;
-        }
-
-        return user.update({ role });
-    }
+    updateRole: (id, role) => User.findByIdAndUpdate(id, { role }, { new: true, runValidators: true })
 });
